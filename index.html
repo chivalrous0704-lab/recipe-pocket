@@ -78,17 +78,22 @@ ul,ol{padding-left:22px;line-height:1.75}.detail-title{font-size:25px;margin:10p
 .chatgpt-import summary{cursor:pointer;font-weight:800}
 .chatgpt-import textarea{margin-top:10px;min-height:150px}
 .chatgpt-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.data-tools{margin-top:10px;padding:12px;background:#fff;border:1px solid var(--border);border-radius:16px}
+.data-tools summary{cursor:pointer;font-weight:800}
+.data-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.file-label{display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--border);border-radius:12px;padding:11px 14px;font-weight:700;background:#fff;cursor:pointer}
+.file-label input{display:none}
 footer{padding:30px 16px;text-align:center;color:var(--muted);font-size:12px}
 @media(min-width:700px){.modal{align-items:center}.sheet{border-radius:24px;max-height:86vh}}
 </style>
 </head>
 <body>
-<!-- app-version: v2.3 -->
+<!-- app-version: v2.4 -->
 <header>
   <div class="wrap">
     <div class="brand">
       <div>
-        <h1>🍳 うちレシピ <span class="version">v2.3</span></h1>
+        <h1>🍳 うちレシピ <span class="version">v2.4</span></h1>
         <div class="sub">家で使うレシピを、見やすくひとまとめ</div>
       </div>
       <button class="primary" onclick="openAddBlank()">＋ 追加</button>
@@ -105,6 +110,17 @@ footer{padding:30px 16px;text-align:center;color:var(--muted);font-size:12px}
         <button class="ghost" onclick="clearPaste()">クリア</button>
       </div>
       <div class="help">※ 今後はこの貼り付け登録が基本です。同名レシピは上書きか別保存を選べます。</div>
+    </details>
+    <details class="data-tools">
+      <summary>💾 バックアップ・復元</summary>
+      <div class="data-actions">
+        <button class="primary" onclick="exportBackup()">バックアップを書き出す</button>
+        <label class="file-label">バックアップを読み込む
+          <input id="backupFile" type="file" accept=".json,application/json" onchange="importBackupFile(event)">
+        </label>
+        <button class="ghost" onclick="restoreKnownRecipes()">標準レシピを復元</button>
+      </div>
+      <div class="help" style="margin-top:8px">※ レシピと写真を1つのJSONファイルにまとめて保存します。端末変更やホーム画面削除の前に書き出してください。</div>
     </details>
     <div class="filters" id="filters"></div>
   </div>
@@ -170,34 +186,7 @@ footer{padding:30px 16px;text-align:center;color:var(--muted);font-size:12px}
 <script>
 const recipeCodeRegistry = {"CHAR-SHU-001":{"title":"圧力鍋チャーシュー","category":"主菜","servings":"約1kg","time":"加圧20〜25分＋一晩","ingredients":["豚バラブロックまたは肩ロース 1kg","長ねぎ（青い部分） 1本分","しょうが 1かけ（薄切り）","にんにく 2片（つぶす）","水 400ml","醤油 200ml","酒 200ml","みりん 100ml","砂糖 大さじ4（約50g）"],"steps":["油をひかずに豚肉の全面を焼き、こんがり焼き色を付ける。","圧力鍋に豚肉、長ねぎ、しょうが、にんにく、煮汁の材料をすべて入れる。","圧力がかかったら20〜25分加圧し、火を止めて自然放置して圧力が下がるまで待つ。","肉を一度取り出して粗熱を取り、煮汁ごと保存容器へ入れる。","冷蔵庫で一晩寝かせる。食べる前にフライパンで表面を軽く焼くか、バーナーで炙ると香ばしく仕上がる。"],"tags":["チャーシューセット","圧力鍋","作り置き","ラーメン"],"memo":"関連レシピ：チャーシュー煮汁の半熟煮卵（AJITAMA-001）。甘めが好きなら砂糖は大さじ5〜6でもOK。豚バラはとろとろ、肩ロースは脂控えめ。煮汁はチャーハン、ラーメンのかえし、炒め物にも活用できます。","relatedCodes":["AJITAMA-001"]},"AJITAMA-001":{"title":"チャーシュー煮汁の半熟煮卵","category":"副菜","servings":"4〜6個","time":"ゆで7分＋漬け12時間","ingredients":["卵 4〜6個","チャーシューの煮汁 300〜500ml","水 適量（煮汁が濃すぎる場合は1〜2割加える）"],"steps":["沸騰したお湯に冷蔵庫から出した卵を入れる。6分30秒でかなりとろとろ、7分で半熟、7分30秒で少し固め、8分で黄身しっかりめ。","ゆで上がったらすぐに氷水へ入れ、5〜10分冷やす。","水の中で殻をむく。","保存袋や保存容器に卵とチャーシューの煮汁を入れる。6時間でほんのり、12時間がおすすめ、24時間でしっかり味。","チャーシューの煮汁がない場合は、醤油100ml・水100ml・みりん50ml・酒50ml・砂糖大さじ1を一度沸騰させ、冷ましてから卵を漬ける。"],"tags":["チャーシューセット","煮卵","半熟卵","ラーメン"],"memo":"関連レシピ：圧力鍋チャーシュー（CHAR-SHU-001）。半熟なら7分ゆで＋12時間漬けがおすすめ。冷蔵で3〜4日以内を目安に食べ切る。","relatedCodes":["CHAR-SHU-001"]}};
 
-const seed = [{
-  id:"machichuka-soup",
-  title:"町中華風 中華スープ",
-  category:"汁物",
-  servings:"4人分",
-  time:"10分",
-  ingredients:[
-    "水 800ml",
-    "鶏ガラスープの素 大さじ1",
-    "しょうゆ 大さじ1",
-    "酒 大さじ1",
-    "塩 小さじ1/3〜1/2",
-    "こしょう 少々",
-    "ごま油 小さじ1",
-    "長ねぎ 10〜15cm",
-    "卵 1個",
-    "味の素 2〜4振り（あれば）"
-  ],
-  steps:[
-    "鍋に水・鶏ガラスープの素・しょうゆ・酒・塩を入れて沸かす。",
-    "薄切りにした長ねぎを入れて1〜2分煮る。",
-    "溶き卵を細く流し入れ、すぐには触らず、ふわっと固まってから軽く混ぜる。",
-    "こしょう・ごま油を加えて完成。白こしょうを少し多めにすると町中華らしくなる。"
-  ],
-  tags:["中華","簡単","卵","スープ"],
-  memo:"しょうゆを入れすぎず、鶏ガラ・塩・うま味調味料で味を決めると店っぽい。",
-  favorite:true
-}];
+const seed = [{"id":"machichuka-soup","title":"町中華風 中華スープ","category":"汁物","servings":"4人分","time":"10分","ingredients":["水 800ml","鶏ガラスープの素 大さじ1","しょうゆ 大さじ1","酒 大さじ1","塩 小さじ1/3〜1/2","こしょう 少々","ごま油 小さじ1","長ねぎ 10〜15cm","卵 1個","味の素 2〜4振り（あれば）"],"steps":["鍋に水・鶏ガラスープの素・しょうゆ・酒・塩を入れて沸かす。","薄切りにした長ねぎを入れて1〜2分煮る。","溶き卵を細く流し入れ、すぐには触らず、ふわっと固まってから軽く混ぜる。","こしょう・ごま油を加えて完成。白こしょうを少し多めにすると町中華らしくなる。"],"tags":["中華","簡単","卵","スープ"],"memo":"しょうゆを入れすぎず、鶏ガラ・塩・うま味調味料で味を決めると店っぽい。","favorite":true},{"id":"restore-char-shu-001","title":"圧力鍋チャーシュー","category":"主菜","servings":"","time":"加圧20〜25分＋一晩","ingredients":["豚バラブロックまたは肩ロース 1kg","長ねぎ（青い部分） 1本分","しょうが 1かけ（薄切り）","にんにく 2片（つぶす）","水 400ml","醤油 200ml","酒 200ml","みりん 100ml","砂糖 大さじ4（約50g）"],"steps":["油をひかずに豚肉の全面を焼き、こんがり焼き色を付ける。","圧力鍋に豚肉、長ねぎ、しょうが、にんにく、煮汁の材料をすべて入れる。","圧力がかかったら20〜25分加圧し、火を止めて自然放置して圧力が下がるまで待つ。","肉を一度取り出して粗熱を取り、煮汁ごと保存容器へ入れる。","冷蔵庫で一晩寝かせる。食べる前にフライパンで表面を軽く焼くか、バーナーで炙ると香ばしく仕上がる。"],"tags":["チャーシューセット","圧力鍋","作り置き","ラーメン"],"memo":"甘めが好きなら砂糖は大さじ5〜6でもOK。豚バラはとろとろ、肩ロースは脂控えめ。煮汁はチャーハン、ラーメンのかえし、炒め物にも活用できます。","code":"CHAR-SHU-001","relatedCodes":["AJITAMA-001"],"favorite":false},{"id":"restore-ajitama-001","title":"チャーシュー煮汁の半熟煮卵","category":"副菜","servings":"","time":"ゆで7分＋漬け12時間","ingredients":["卵 4〜6個","チャーシューの煮汁 300〜500ml","水 適量（煮汁が濃すぎる場合は1〜2割加える）"],"steps":["沸騰したお湯に冷蔵庫から出した卵を入れる。6分30秒でかなりとろとろ、7分で半熟、7分30秒で少し固め、8分で黄身しっかりめ。","ゆで上がったらすぐに氷水へ入れ、5〜10分冷やす。","水の中で殻をむく。","保存袋や保存容器に卵とチャーシューの煮汁を入れる。6時間でほんのり、12時間がおすすめ、24時間でしっかり味。","チャーシューの煮汁がない場合は、醤油100ml・水100ml・みりん50ml・酒50ml・砂糖大さじ1を一度沸騰させ、冷ましてから卵を漬ける。"],"tags":["チャーシューセット","煮卵","半熟卵","ラーメン"],"memo":"半熟なら7分ゆで＋12時間漬けがおすすめ。冷蔵で3〜4日以内を目安に食べ切る。","code":"AJITAMA-001","relatedCodes":["CHAR-SHU-001"],"favorite":false},{"id":"restore-juicy-chicken","title":"ジューシーチキン","category":"主菜","servings":"","time":"","ingredients":["鶏むね肉 2枚","片栗粉 適量","油 適量","しょう油 大さじ2","みりん 大さじ2","酒 大さじ2","砂糖 大さじ2","オイスターソース 大さじ1","しょうがチューブ 3cm","にんにくチューブ 3cm","みそ 小さじ2","水 大さじ2"],"steps":["しょう油・みりん・酒・砂糖・オイスターソース・しょうが・にんにく・みそ・水をよく混ぜてタレを作る。","鶏むね肉の筋に親指を入れて開き、観音開きにする。左右に開いて薄く平らにする。","開いた鶏むね肉に片栗粉をまぶし、油を回し入れる。","火をつけて、両面にこんがり焼き色がつくまで焼く。","最初に作ったタレを回しかけ、全体によく絡める。","食べやすい大きさに切って完成。"],"tags":["鶏むね肉","Instagram","甘辛","節約","子ども向け"],"memo":"鶏むね肉を観音開きにして薄くすることで、中まで火を通しやすくするレシピ。","sourceName":"Instagram","sourceAuthor":"tobimaru_gohan","sourceUrl":"https://www.instagram.com/reel/DLmu4G3xvNo/","favorite":false}];
 
 let recipes = JSON.parse(localStorage.getItem("uchiRecipes") || "null") || seed;
 let currentCat = "すべて";
@@ -429,6 +418,113 @@ async function hydrateEditPhoto(id){
   }catch(e){
     resetCropState();
   }
+}
+
+
+async function getAllPhotosForBackup(){
+  const result={};
+  try{
+    const db=await openPhotoDb();
+    await new Promise((resolve,reject)=>{
+      const tx=db.transaction("photos","readonly");
+      const store=tx.objectStore("photos");
+      const req=store.openCursor();
+      req.onsuccess=()=>{
+        const cursor=req.result;
+        if(cursor){
+          result[String(cursor.key)]=cursor.value;
+          cursor.continue();
+        }else resolve();
+      };
+      req.onerror=()=>reject(req.error);
+    });
+  }catch(e){ console.error(e); }
+  return result;
+}
+async function clearAllPhotos(){
+  try{
+    const db=await openPhotoDb();
+    await new Promise((resolve,reject)=>{
+      const tx=db.transaction("photos","readwrite");
+      tx.objectStore("photos").clear();
+      tx.oncomplete=()=>resolve();
+      tx.onerror=()=>reject(tx.error);
+    });
+  }catch(e){ console.error(e); }
+}
+async function exportBackup(){
+  try{
+    const photos=await getAllPhotosForBackup();
+    const backup={
+      app:"うちレシピ",
+      version:"2.4",
+      exportedAt:new Date().toISOString(),
+      recipes,
+      photos
+    };
+    const blob=new Blob([JSON.stringify(backup,null,2)],{type:"application/json"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");
+    const d=new Date();
+    const y=d.getFullYear();
+    const m=String(d.getMonth()+1).padStart(2,"0");
+    const day=String(d.getDate()).padStart(2,"0");
+    a.href=url;
+    a.download=`uchi-recipe-backup-${y}${m}${day}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+  }catch(e){
+    console.error(e);
+    alert("バックアップの作成に失敗しました。");
+  }
+}
+async function importBackupObject(data){
+  if(!data || !Array.isArray(data.recipes)) throw new Error("invalid backup");
+  if(!confirm(`バックアップから${data.recipes.length}件のレシピを復元します。\n現在のデータは置き換わります。よろしいですか？`)) return;
+  recipes=data.recipes;
+  persist();
+  await clearAllPhotos();
+  if(data.photos && typeof data.photos==="object"){
+    for(const [id,photo] of Object.entries(data.photos)){
+      if(photo) await savePhoto(id,photo);
+    }
+  }
+  render();
+  alert("バックアップを復元しました。");
+}
+async function importBackupFile(event){
+  const file=event.target.files?.[0];
+  if(!file) return;
+  try{
+    const text=await file.text();
+    const data=JSON.parse(text);
+    await importBackupObject(data);
+  }catch(e){
+    console.error(e);
+    alert("バックアップファイルを読み込めませんでした。");
+  }finally{
+    event.target.value="";
+  }
+}
+function restoreKnownRecipes(){
+  const known=JSON.parse(JSON.stringify(seed));
+  let added=0, updated=0;
+  for(const item of known){
+    const existing=recipes.find(r=>normalizeTitleForCompare(r.title)===normalizeTitleForCompare(item.title));
+    if(existing){
+      const keepFavorite=!!existing.favorite;
+      Object.assign(existing,item,{id:existing.id,favorite:keepFavorite});
+      updated++;
+    }else{
+      recipes.push(item);
+      added++;
+    }
+  }
+  persist();
+  render();
+  alert(`標準レシピを復元しました。\n追加 ${added}件 / 更新 ${updated}件`);
 }
 
 function persist(){ localStorage.setItem("uchiRecipes", JSON.stringify(recipes)); }
