@@ -43,20 +43,22 @@ ul,ol{padding-left:22px;line-height:1.75}.detail-title{font-size:25px;margin:10p
 .serving-box strong{margin-right:auto}
 .serving-btn{width:42px;height:42px;padding:0;border-radius:50%;background:white;border:1px solid var(--border);font-size:22px}
 .serving-count{min-width:54px;text-align:center;font-weight:800;font-size:18px}
+.import-notice{display:none;background:#fff6d8;border:1px solid #f0d98a;color:#6b5412;border-radius:12px;padding:10px 12px;font-size:12px;line-height:1.5}
+.import-notice.show{display:block}
 footer{padding:30px 16px;text-align:center;color:var(--muted);font-size:12px}
 @media(min-width:700px){.modal{align-items:center}.sheet{border-radius:24px;max-height:86vh}}
 </style>
 </head>
 <body>
-<!-- app-version: v1.1 -->
+<!-- app-version: v1.2 -->
 <header>
   <div class="wrap">
     <div class="brand">
       <div>
-        <h1>🍳 うちレシピ <span class="version">v1.1</span></h1>
+        <h1>🍳 うちレシピ <span class="version">v1.2</span></h1>
         <div class="sub">家で使うレシピを、見やすくひとまとめ</div>
       </div>
-      <button class="primary" onclick="openAdd()">＋ 追加</button>
+      <button class="primary" onclick="openAddBlank()">＋ 追加</button>
     </div>
     <div class="searchbar">
       <input id="search" placeholder="料理名・材料で検索" oninput="render()">
@@ -83,6 +85,7 @@ footer{padding:30px 16px;text-align:center;color:var(--muted);font-size:12px}
     <button class="close" onclick="closeModal('addModal')">✕</button>
     <h2>レシピを追加</h2>
     <div class="form">
+      <div id="importNotice" class="import-notice">ChatGPTからレシピを読み込みました。内容を確認して「保存する」を押してください。</div>
       <input id="fTitle" placeholder="料理名">
       <div class="row">
         <select id="fCategory">
@@ -178,41 +181,41 @@ function getBaseServings(text){
 function formatNum(n){
   const rounded=Math.round(n*100)/100;
   if(Number.isInteger(rounded)) return String(rounded);
-  return String(rounded).replace(/\.0+$/,"");
+  return String(rounded).replace(/0+$/,"").replace(/\.$/,"");
 }
-function scaleFractionToken(token, ratio){
-  const parts=token.split("/");
-  if(parts.length!==2) return token;
-  const a=Number(parts[0]), b=Number(parts[1]);
-  if(!Number.isFinite(a)||!Number.isFinite(b)||b===0) return token;
-  return formatNum((a/b)*ratio);
+function parseQty(token){
+  if(String(token).includes("/")){
+    const [a,b]=String(token).split("/").map(Number);
+    return b ? a/b : Number(token);
+  }
+  return Number(token);
+}
+function roundStep(value, step){
+  return Math.round(value/step)*step;
+}
+function roundByUnit(value, unit){
+  const u=String(unit||"").replace(/\s/g,"");
+  if(u==="大さじ" || u==="小さじ") return roundStep(value,0.25);
+  if(["ml","mL","g","cc"].includes(u)) return roundStep(value,5);
+  if(["kg","L"].includes(u)) return roundStep(value,0.05);
+  if(["個","本","枚","袋","パック","丁","玉","束"].includes(u)) return roundStep(value,0.5);
+  if(["cm","振り","滴","片","粒"].includes(u)) return roundStep(value,1);
+  return roundStep(value,0.25);
 }
 function scaleIngredient(text, ratio){
   if(ratio===1) return text;
-  const keep=[];
-  const stash=value=>{
-    const token=String.fromCharCode(0xE000 + keep.length);
-    keep.push(value);
-    return token;
-  };
-  // 分数の範囲（例：1/3〜1/2）
-  text=text.replace(/(\d+)\/(\d+)\s*[〜~～-]\s*(\d+)\/(\d+)/g,(m,a,b,c,d)=>
-    stash(`${formatNum((Number(a)/Number(b))*ratio)}〜${formatNum((Number(c)/Number(d))*ratio)}`)
-  );
-  // 数値の範囲（例：10〜15、2〜4）
-  text=text.replace(/(\d+(?:\.\d+)?)\s*[〜~～-]\s*(\d+(?:\.\d+)?)/g,(m,a,b)=>
-    stash(`${formatNum(Number(a)*ratio)}〜${formatNum(Number(b)*ratio)}`)
-  );
-  // 単独の分数（例：1/2）
-  text=text.replace(/(\d+)\/(\d+)/g,(m,a,b)=>
-    stash(formatNum((Number(a)/Number(b))*ratio))
-  );
-  // 単独の数値
-  text=text.replace(/\d+(?:\.\d+)?/g,m=>formatNum(Number(m)*ratio));
-  // 先に退避した範囲・分数を戻す
-  keep.forEach((value,i)=>{ text=text.replace(String.fromCharCode(0xE000+i),value); });
-  return text;
+  const re=/(\d+\/\d+|\d+(?:\.\d+)?)(?:\s*[〜~～-]\s*(\d+\/\d+|\d+(?:\.\d+)?))?(\s*(?:大さじ|小さじ|ml|mL|g|kg|L|cc|個|本|枚|袋|パック|丁|玉|束|cm|振り|滴|片|粒))?/g;
+  return String(text).replace(re,(m,a,b,unit)=>{
+    const u=(unit||"").trim();
+    const v1=roundByUnit(parseQty(a)*ratio,u);
+    if(b){
+      const v2=roundByUnit(parseQty(b)*ratio,u);
+      return `${formatNum(v1)}〜${formatNum(v2)}${unit||""}`;
+    }
+    return `${formatNum(v1)}${unit||""}`;
+  });
 }
+
 function changeServings(id, delta){
   const r=recipes.find(x=>x.id===id); if(!r)return;
   const base=getBaseServings(r.servings);
@@ -251,7 +254,13 @@ function openDetail(id, selectedServings=null){
     </div>`;
   document.getElementById("detailModal").classList.add("show");
 }
-function openAdd(){ document.getElementById("addModal").classList.add("show"); }
+function openAdd(){
+  document.getElementById("addModal").classList.add("show");
+}
+function openAddBlank(){
+  document.getElementById("importNotice").classList.remove("show");
+  openAdd();
+}
 function closeModal(id){ document.getElementById(id).classList.remove("show"); }
 
 function saveRecipe(){
@@ -270,7 +279,7 @@ function saveRecipe(){
     memo:document.getElementById("fMemo").value.trim(),
     favorite:false
   };
-  recipes.unshift(r);persist();closeModal("addModal");
+  recipes.unshift(r);persist();document.getElementById("importNotice").classList.remove("show");closeModal("addModal");
   ["fTitle","fServings","fTime","fIngredients","fSteps","fTags","fMemo"].forEach(id=>document.getElementById(id).value="");
   render();
 }
@@ -278,8 +287,37 @@ function deleteRecipe(id){
   if(!confirm("このレシピを削除しますか？"))return;
   recipes=recipes.filter(x=>x.id!==id);persist();closeModal("detailModal");render();
 }
+
+function fillAddForm(data){
+  document.getElementById("fTitle").value=data.title||"";
+  const allowed=categories().filter(x=>x!=="すべて");
+  document.getElementById("fCategory").value=allowed.includes(data.category)?data.category:"その他";
+  document.getElementById("fServings").value=data.servings||"";
+  document.getElementById("fTime").value=data.time||"";
+  document.getElementById("fIngredients").value=Array.isArray(data.ingredients)?data.ingredients.join("\n"):(data.ingredients||"");
+  document.getElementById("fSteps").value=Array.isArray(data.steps)?data.steps.join("\n"):(data.steps||"");
+  document.getElementById("fTags").value=Array.isArray(data.tags)?data.tags.join(","):(data.tags||"");
+  document.getElementById("fMemo").value=data.memo||"";
+  document.getElementById("importNotice").classList.add("show");
+  openAdd();
+}
+function importRecipeFromUrl(){
+  const hash=location.hash||"";
+  if(!hash.startsWith("#recipe=")) return;
+  try{
+    const raw=decodeURIComponent(hash.slice(8));
+    const data=JSON.parse(raw);
+    fillAddForm(data);
+    history.replaceState(null,"",location.pathname+location.search);
+  }catch(e){
+    console.error("レシピ読み込みエラー",e);
+    alert("レシピの読み込みに失敗しました。");
+  }
+}
+
 document.querySelectorAll(".modal").forEach(m=>m.addEventListener("click",e=>{if(e.target===m)m.classList.remove("show")}));
 render();
+importRecipeFromUrl();
 </script>
 </body>
 </html>
