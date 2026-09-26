@@ -59,12 +59,12 @@ footer{padding:30px 16px;text-align:center;color:var(--muted);font-size:12px}
 </style>
 </head>
 <body>
-<!-- app-version: v1.6 -->
+<!-- app-version: v1.7 -->
 <header>
   <div class="wrap">
     <div class="brand">
       <div>
-        <h1>🍳 うちレシピ <span class="version">v1.6</span></h1>
+        <h1>🍳 うちレシピ <span class="version">v1.7</span></h1>
         <div class="sub">家で使うレシピを、見やすくひとまとめ</div>
       </div>
       <button class="primary" onclick="openAddBlank()">＋ 追加</button>
@@ -101,7 +101,7 @@ footer{padding:30px 16px;text-align:center;color:var(--muted);font-size:12px}
 <div class="modal" id="addModal">
   <div class="sheet">
     <button class="close" onclick="closeModal('addModal')">✕</button>
-    <h2>レシピを追加</h2>
+    <h2 id="formTitle">レシピを追加</h2>
     <div class="form">
       <div id="importNotice" class="import-notice">ChatGPTからレシピを読み込みました。内容を確認して「保存する」を押してください。</div>
       <input id="fTitle" placeholder="料理名">
@@ -292,18 +292,47 @@ function openDetail(id, selectedServings=null, selectedMultiplier=null){
         : `<button class="ghost" onclick="importRelatedCode('${code}')">＋ ${esc(label)}を登録</button>`;
     }).join("")}</div></div>`:""}
     <div class="actions">
+      <button class="primary" onclick="openEdit('${r.id}')">✏️ 編集</button>
       <button class="ghost" onclick="toggleFav('${r.id}');openDetail('${r.id}',${isPeopleRecipe?current:'null'},${isPeopleRecipe?'null':current})">${r.favorite?'★ お気に入り解除':'☆ お気に入り'}</button>
       ${r.id!=="machichuka-soup"?`<button class="ghost" onclick="deleteRecipe('${r.id}')">削除</button>`:""}
     </div>`;
   document.getElementById("detailModal").classList.add("show");
 }
+let editingRecipeId=null;
+
+function fillFormFromRecipe(r){
+  document.getElementById("fTitle").value=r.title||"";
+  document.getElementById("fCategory").value=r.category||"その他";
+  document.getElementById("fServings").value=r.servings||"";
+  document.getElementById("fTime").value=r.time||"";
+  document.getElementById("fIngredients").value=(r.ingredients||[]).join("\n");
+  document.getElementById("fSteps").value=(r.steps||[]).join("\n");
+  document.getElementById("fTags").value=(r.tags||[]).join(",");
+  document.getElementById("fMemo").value=r.memo||"";
+}
+function openEdit(id){
+  const r=recipes.find(x=>x.id===id); if(!r)return;
+  editingRecipeId=id;
+  window.__pendingRecipeCode=r.code||"";
+  window.__pendingRelatedCodes=r.relatedCodes||[];
+  document.getElementById("formTitle").textContent="レシピを編集";
+  document.getElementById("importNotice").classList.remove("show");
+  fillFormFromRecipe(r);
+  closeModal("detailModal");
+  openAdd();
+}
+
 function openAdd(){
   document.getElementById("addModal").classList.add("show");
 }
 function openAddBlank(){
+  editingRecipeId=null;
   window.__pendingRecipeCode="";
   window.__pendingRelatedCodes=[];
+  document.getElementById("formTitle").textContent="レシピを追加";
   document.getElementById("importNotice").classList.remove("show");
+  ["fTitle","fServings","fTime","fIngredients","fSteps","fTags","fMemo"].forEach(id=>document.getElementById(id).value="");
+  document.getElementById("fCategory").value="主菜";
   openAdd();
 }
 function closeModal(id){ document.getElementById(id).classList.remove("show"); }
@@ -312,8 +341,8 @@ function saveRecipe(){
   const title=document.getElementById("fTitle").value.trim();
   if(!title){alert("料理名を入力してください");return;}
   const splitLines=id=>document.getElementById(id).value.split(/\n+/).map(x=>x.trim()).filter(Boolean);
-  const r={
-    id:"r"+Date.now(),
+
+  const common={
     title,
     category:document.getElementById("fCategory").value,
     servings:document.getElementById("fServings").value.trim(),
@@ -323,10 +352,30 @@ function saveRecipe(){
     tags:document.getElementById("fTags").value.split(",").map(x=>x.trim()).filter(Boolean),
     memo:document.getElementById("fMemo").value.trim(),
     code:window.__pendingRecipeCode||"",
-    relatedCodes:window.__pendingRelatedCodes||[],
-    favorite:false
+    relatedCodes:window.__pendingRelatedCodes||[]
   };
-  recipes.unshift(r);persist();window.__pendingRecipeCode="";window.__pendingRelatedCodes=[];const paste=document.getElementById("chatgptPaste");if(paste)paste.value="";document.getElementById("importNotice").classList.remove("show");closeModal("addModal");
+
+  if(editingRecipeId){
+    const idx=recipes.findIndex(x=>x.id===editingRecipeId);
+    if(idx>=0){
+      recipes[idx]={...recipes[idx],...common};
+    }
+  }else{
+    recipes.unshift({
+      id:"r"+Date.now(),
+      ...common,
+      favorite:false
+    });
+  }
+
+  persist();
+  editingRecipeId=null;
+  window.__pendingRecipeCode="";
+  window.__pendingRelatedCodes=[];
+  const paste=document.getElementById("chatgptPaste"); if(paste) paste.value="";
+  document.getElementById("importNotice").classList.remove("show");
+  document.getElementById("formTitle").textContent="レシピを追加";
+  closeModal("addModal");
   ["fTitle","fServings","fTime","fIngredients","fSteps","fTags","fMemo"].forEach(id=>document.getElementById(id).value="");
   render();
 }
@@ -429,6 +478,8 @@ function importRelatedCode(code){
 }
 
 function fillAddForm(data){
+  editingRecipeId=null;
+  document.getElementById("formTitle").textContent="レシピを追加";
   document.getElementById("fTitle").value=data.title||"";
   const allowed=categories().filter(x=>x!=="すべて");
   document.getElementById("fCategory").value=allowed.includes(data.category)?data.category:"その他";
