@@ -49,17 +49,21 @@ ul,ol{padding-left:22px;line-height:1.75}.detail-title{font-size:25px;margin:10p
 .code-import input{min-width:0}
 .related{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
 .related button{font-size:12px;padding:8px 10px}
+.chatgpt-import{margin-top:10px;padding:12px;background:#fff;border:1px solid var(--border);border-radius:16px}
+.chatgpt-import summary{cursor:pointer;font-weight:800}
+.chatgpt-import textarea{margin-top:10px;min-height:150px}
+.chatgpt-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
 footer{padding:30px 16px;text-align:center;color:var(--muted);font-size:12px}
 @media(min-width:700px){.modal{align-items:center}.sheet{border-radius:24px;max-height:86vh}}
 </style>
 </head>
 <body>
-<!-- app-version: v1.3 -->
+<!-- app-version: v1.4 -->
 <header>
   <div class="wrap">
     <div class="brand">
       <div>
-        <h1>🍳 うちレシピ <span class="version">v1.3</span></h1>
+        <h1>🍳 うちレシピ <span class="version">v1.4</span></h1>
         <div class="sub">家で使うレシピを、見やすくひとまとめ</div>
       </div>
       <button class="primary" onclick="openAddBlank()">＋ 追加</button>
@@ -72,6 +76,15 @@ footer{padding:30px 16px;text-align:center;color:var(--muted);font-size:12px}
       <input id="recipeCode" placeholder="登録コード 例：CHAR-SHU-001" autocomplete="off">
       <button class="ghost" onclick="importByCode()">コード登録</button>
     </div>
+    <details class="chatgpt-import">
+      <summary>🤖 ChatGPTから貼り付け登録</summary>
+      <textarea id="chatgptPaste" placeholder='ChatGPTが出した登録用データをここに貼り付け'></textarea>
+      <div class="chatgpt-actions">
+        <button class="primary" onclick="importFromPaste()">読み込む</button>
+        <button class="ghost" onclick="clearPaste()">クリア</button>
+      </div>
+      <div class="help">※ JSON形式の登録用データを貼り付けると、追加フォームへ自動入力します。</div>
+    </details>
     <div class="filters" id="filters"></div>
   </div>
 </header>
@@ -300,13 +313,51 @@ function saveRecipe(){
     relatedCodes:window.__pendingRelatedCodes||[],
     favorite:false
   };
-  recipes.unshift(r);persist();window.__pendingRecipeCode="";window.__pendingRelatedCodes=[];document.getElementById("importNotice").classList.remove("show");closeModal("addModal");
+  recipes.unshift(r);persist();window.__pendingRecipeCode="";window.__pendingRelatedCodes=[];const paste=document.getElementById("chatgptPaste");if(paste)paste.value="";document.getElementById("importNotice").classList.remove("show");closeModal("addModal");
   ["fTitle","fServings","fTime","fIngredients","fSteps","fTags","fMemo"].forEach(id=>document.getElementById(id).value="");
   render();
 }
 function deleteRecipe(id){
   if(!confirm("このレシピを削除しますか？"))return;
   recipes=recipes.filter(x=>x.id!==id);persist();closeModal("detailModal");render();
+}
+
+function cleanJsonText(text){
+  let t=String(text||"").trim();
+  t=t.replace(/^```(?:json)?\s*/i,"").replace(/\s*```$/,"").trim();
+  return t;
+}
+function validateRecipeData(data){
+  if(!data || typeof data!=="object" || Array.isArray(data)) throw new Error("形式が正しくありません。");
+  if(!data.title || typeof data.title!=="string") throw new Error("料理名がありません。");
+  const out={
+    title:String(data.title||""),
+    category:String(data.category||"その他"),
+    servings:String(data.servings||""),
+    time:String(data.time||""),
+    ingredients:Array.isArray(data.ingredients)?data.ingredients.map(String):[],
+    steps:Array.isArray(data.steps)?data.steps.map(String):[],
+    tags:Array.isArray(data.tags)?data.tags.map(String):[],
+    memo:String(data.memo||""),
+    code:String(data.code||""),
+    relatedCodes:Array.isArray(data.relatedCodes)?data.relatedCodes.map(String):[]
+  };
+  return out;
+}
+function importFromPaste(){
+  const box=document.getElementById("chatgptPaste");
+  const raw=cleanJsonText(box.value);
+  if(!raw){ alert("ChatGPTの登録用データを貼り付けてください。"); return; }
+  try{
+    const data=validateRecipeData(JSON.parse(raw));
+    fillAddForm(data);
+  }catch(e){
+    alert("読み込みに失敗しました。ChatGPTの「うちレシピ登録用データ」をそのまま貼り付けてください。");
+    console.error(e);
+  }
+}
+function clearPaste(){
+  document.getElementById("chatgptPaste").value="";
 }
 
 function normalizeCode(code){
@@ -336,6 +387,8 @@ function fillAddForm(data){
   document.getElementById("fSteps").value=Array.isArray(data.steps)?data.steps.join("\n"):(data.steps||"");
   document.getElementById("fTags").value=Array.isArray(data.tags)?data.tags.join(","):(data.tags||"");
   document.getElementById("fMemo").value=data.memo||"";
+  window.__pendingRecipeCode=data.code||"";
+  window.__pendingRelatedCodes=Array.isArray(data.relatedCodes)?data.relatedCodes:[];
   document.getElementById("importNotice").classList.add("show");
   openAdd();
 }
