@@ -50,6 +50,8 @@ ul,ol{padding-left:22px;line-height:1.75}.detail-title{font-size:25px;margin:10p
 .code-import input{min-width:0}
 .related{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
 .related button{font-size:12px;padding:8px 10px}
+.source-box{background:#faf7f3;border:1px solid var(--border);border-radius:14px;padding:12px;line-height:1.6}
+.source-box a{word-break:break-all}
 .chatgpt-import{margin-top:10px;padding:12px;background:#fff;border:1px solid var(--border);border-radius:16px}
 .chatgpt-import summary{cursor:pointer;font-weight:800}
 .chatgpt-import textarea{margin-top:10px;min-height:150px}
@@ -59,12 +61,12 @@ footer{padding:30px 16px;text-align:center;color:var(--muted);font-size:12px}
 </style>
 </head>
 <body>
-<!-- app-version: v1.7 -->
+<!-- app-version: v1.8 -->
 <header>
   <div class="wrap">
     <div class="brand">
       <div>
-        <h1>🍳 うちレシピ <span class="version">v1.7</span></h1>
+        <h1>🍳 うちレシピ <span class="version">v1.8</span></h1>
         <div class="sub">家で使うレシピを、見やすくひとまとめ</div>
       </div>
       <button class="primary" onclick="openAddBlank()">＋ 追加</button>
@@ -116,6 +118,9 @@ footer{padding:30px 16px;text-align:center;color:var(--muted);font-size:12px}
       <textarea id="fSteps" placeholder="作り方を1工程ずつ入力&#10;鍋に調味料を入れて沸かす&#10;卵を流し入れる"></textarea>
       <input id="fTags" placeholder="タグ（カンマ区切り）例：簡単,中華,卵">
       <textarea id="fMemo" placeholder="メモ・家族の感想・次回の変更点"></textarea>
+      <input id="fSourceName" placeholder="出典名 例：Instagram / TikTok / YouTube / ブログ">
+      <input id="fSourceAuthor" placeholder="投稿者名・アカウント名（任意）">
+      <input id="fSourceUrl" placeholder="元レシピのURL（任意）" inputmode="url">
       <button class="primary" onclick="saveRecipe()">保存する</button>
       <div class="help">※ レシピはこの端末内に保存されます。</div>
     </div>
@@ -284,6 +289,11 @@ function openDetail(id, selectedServings=null, selectedMultiplier=null){
     <div class="section"><h3>材料</h3><ul>${(r.ingredients||[]).map(x=>`<li>${esc(scaleIngredient(x,ratio))}</li>`).join("")}</ul></div>
     <div class="section"><h3>作り方</h3><ol>${(r.steps||[]).map(x=>`<li>${esc(x)}</li>`).join("")}</ol></div>
     ${r.memo?`<div class="section"><h3>メモ</h3><p>${esc(r.memo).replace(/\n/g,"<br>")}</p></div>`:""}
+    ${(r.sourceName||r.sourceAuthor||r.sourceUrl)?`<div class="section"><h3>出典</h3><div class="source-box">
+      ${r.sourceName?`<div><strong>出典：</strong>${esc(r.sourceName)}</div>`:""}
+      ${r.sourceAuthor?`<div><strong>投稿者：</strong>${esc(r.sourceAuthor)}</div>`:""}
+      ${r.sourceUrl?`<div><strong>元URL：</strong><a href="${esc(r.sourceUrl)}" target="_blank" rel="noopener noreferrer">${esc(r.sourceUrl)}</a></div>`:""}
+    </div></div>`:""}
     ${(r.relatedCodes||[]).length?`<div class="section"><h3>関連レシピ</h3><div class="related">${r.relatedCodes.map(code=>{
       const linked=recipes.find(x=>x.code===code);
       const label=linked?linked.title:(recipeCodeRegistry[code]?.title||code);
@@ -309,6 +319,9 @@ function fillFormFromRecipe(r){
   document.getElementById("fSteps").value=(r.steps||[]).join("\n");
   document.getElementById("fTags").value=(r.tags||[]).join(",");
   document.getElementById("fMemo").value=r.memo||"";
+  document.getElementById("fSourceName").value=r.sourceName||"";
+  document.getElementById("fSourceAuthor").value=r.sourceAuthor||"";
+  document.getElementById("fSourceUrl").value=r.sourceUrl||"";
 }
 function openEdit(id){
   const r=recipes.find(x=>x.id===id); if(!r)return;
@@ -331,7 +344,7 @@ function openAddBlank(){
   window.__pendingRelatedCodes=[];
   document.getElementById("formTitle").textContent="レシピを追加";
   document.getElementById("importNotice").classList.remove("show");
-  ["fTitle","fServings","fTime","fIngredients","fSteps","fTags","fMemo"].forEach(id=>document.getElementById(id).value="");
+  ["fTitle","fServings","fTime","fIngredients","fSteps","fTags","fMemo","fSourceName","fSourceAuthor","fSourceUrl"].forEach(id=>document.getElementById(id).value="");
   document.getElementById("fCategory").value="主菜";
   openAdd();
 }
@@ -352,7 +365,10 @@ function saveRecipe(){
     tags:document.getElementById("fTags").value.split(",").map(x=>x.trim()).filter(Boolean),
     memo:document.getElementById("fMemo").value.trim(),
     code:window.__pendingRecipeCode||"",
-    relatedCodes:window.__pendingRelatedCodes||[]
+    relatedCodes:window.__pendingRelatedCodes||[],
+    sourceName:document.getElementById("fSourceName").value.trim(),
+    sourceAuthor:document.getElementById("fSourceAuthor").value.trim(),
+    sourceUrl:document.getElementById("fSourceUrl").value.trim()
   };
 
   if(editingRecipeId){
@@ -376,7 +392,7 @@ function saveRecipe(){
   document.getElementById("importNotice").classList.remove("show");
   document.getElementById("formTitle").textContent="レシピを追加";
   closeModal("addModal");
-  ["fTitle","fServings","fTime","fIngredients","fSteps","fTags","fMemo"].forEach(id=>document.getElementById(id).value="");
+  ["fTitle","fServings","fTime","fIngredients","fSteps","fTags","fMemo","fSourceName","fSourceAuthor","fSourceUrl"].forEach(id=>document.getElementById(id).value="");
   render();
 }
 function deleteRecipe(id){
@@ -402,7 +418,10 @@ function validateRecipeData(data){
     tags:Array.isArray(data.tags)?data.tags.map(String):[],
     memo:String(data.memo||""),
     code:String(data.code||""),
-    relatedCodes:Array.isArray(data.relatedCodes)?data.relatedCodes.map(String):[]
+    relatedCodes:Array.isArray(data.relatedCodes)?data.relatedCodes.map(String):[],
+    sourceName:String(data.sourceName||""),
+    sourceAuthor:String(data.sourceAuthor||""),
+    sourceUrl:String(data.sourceUrl||"")
   };
   return out;
 }
@@ -428,7 +447,10 @@ function replaceRecipe(existingId, data){
     tags:Array.isArray(data.tags)?data.tags:[],
     memo:data.memo||"",
     code:data.code||old.code||"",
-    relatedCodes:Array.isArray(data.relatedCodes)?data.relatedCodes:(old.relatedCodes||[])
+    relatedCodes:Array.isArray(data.relatedCodes)?data.relatedCodes:(old.relatedCodes||[]),
+    sourceName:data.sourceName||old.sourceName||"",
+    sourceAuthor:data.sourceAuthor||old.sourceAuthor||"",
+    sourceUrl:data.sourceUrl||old.sourceUrl||""
   };
   persist();
   render();
@@ -489,6 +511,9 @@ function fillAddForm(data){
   document.getElementById("fSteps").value=Array.isArray(data.steps)?data.steps.join("\n"):(data.steps||"");
   document.getElementById("fTags").value=Array.isArray(data.tags)?data.tags.join(","):(data.tags||"");
   document.getElementById("fMemo").value=data.memo||"";
+  document.getElementById("fSourceName").value=data.sourceName||"";
+  document.getElementById("fSourceAuthor").value=data.sourceAuthor||"";
+  document.getElementById("fSourceUrl").value=data.sourceUrl||"";
   window.__pendingRecipeCode=data.code||"";
   window.__pendingRelatedCodes=Array.isArray(data.relatedCodes)?data.relatedCodes:[];
   document.getElementById("importNotice").classList.add("show");
