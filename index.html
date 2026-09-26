@@ -45,17 +45,21 @@ ul,ol{padding-left:22px;line-height:1.75}.detail-title{font-size:25px;margin:10p
 .serving-count{min-width:54px;text-align:center;font-weight:800;font-size:18px}
 .import-notice{display:none;background:#fff6d8;border:1px solid #f0d98a;color:#6b5412;border-radius:12px;padding:10px 12px;font-size:12px;line-height:1.5}
 .import-notice.show{display:block}
+.code-import{display:flex;gap:8px;margin-top:10px}
+.code-import input{min-width:0}
+.related{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.related button{font-size:12px;padding:8px 10px}
 footer{padding:30px 16px;text-align:center;color:var(--muted);font-size:12px}
 @media(min-width:700px){.modal{align-items:center}.sheet{border-radius:24px;max-height:86vh}}
 </style>
 </head>
 <body>
-<!-- app-version: v1.2 -->
+<!-- app-version: v1.3 -->
 <header>
   <div class="wrap">
     <div class="brand">
       <div>
-        <h1>🍳 うちレシピ <span class="version">v1.2</span></h1>
+        <h1>🍳 うちレシピ <span class="version">v1.3</span></h1>
         <div class="sub">家で使うレシピを、見やすくひとまとめ</div>
       </div>
       <button class="primary" onclick="openAddBlank()">＋ 追加</button>
@@ -63,6 +67,10 @@ footer{padding:30px 16px;text-align:center;color:var(--muted);font-size:12px}
     <div class="searchbar">
       <input id="search" placeholder="料理名・材料で検索" oninput="render()">
       <button class="ghost" onclick="toggleFavOnly()">★</button>
+    </div>
+    <div class="code-import">
+      <input id="recipeCode" placeholder="登録コード 例：CHAR-SHU-001" autocomplete="off">
+      <button class="ghost" onclick="importByCode()">コード登録</button>
     </div>
     <div class="filters" id="filters"></div>
   </div>
@@ -105,6 +113,8 @@ footer{padding:30px 16px;text-align:center;color:var(--muted);font-size:12px}
 </div>
 
 <script>
+const recipeCodeRegistry = {"CHAR-SHU-001":{"title":"圧力鍋チャーシュー","category":"主菜","servings":"約1kg","time":"加圧20〜25分＋一晩","ingredients":["豚バラブロックまたは肩ロース 1kg","長ねぎ（青い部分） 1本分","しょうが 1かけ（薄切り）","にんにく 2片（つぶす）","水 400ml","醤油 200ml","酒 200ml","みりん 100ml","砂糖 大さじ4（約50g）"],"steps":["油をひかずに豚肉の全面を焼き、こんがり焼き色を付ける。","圧力鍋に豚肉、長ねぎ、しょうが、にんにく、煮汁の材料をすべて入れる。","圧力がかかったら20〜25分加圧し、火を止めて自然放置して圧力が下がるまで待つ。","肉を一度取り出して粗熱を取り、煮汁ごと保存容器へ入れる。","冷蔵庫で一晩寝かせる。食べる前にフライパンで表面を軽く焼くか、バーナーで炙ると香ばしく仕上がる。"],"tags":["チャーシューセット","圧力鍋","作り置き","ラーメン"],"memo":"関連レシピ：チャーシュー煮汁の半熟煮卵（AJITAMA-001）。甘めが好きなら砂糖は大さじ5〜6でもOK。豚バラはとろとろ、肩ロースは脂控えめ。煮汁はチャーハン、ラーメンのかえし、炒め物にも活用できます。","relatedCodes":["AJITAMA-001"]},"AJITAMA-001":{"title":"チャーシュー煮汁の半熟煮卵","category":"副菜","servings":"4〜6個","time":"ゆで7分＋漬け12時間","ingredients":["卵 4〜6個","チャーシューの煮汁 300〜500ml","水 適量（煮汁が濃すぎる場合は1〜2割加える）"],"steps":["沸騰したお湯に冷蔵庫から出した卵を入れる。6分30秒でかなりとろとろ、7分で半熟、7分30秒で少し固め、8分で黄身しっかりめ。","ゆで上がったらすぐに氷水へ入れ、5〜10分冷やす。","水の中で殻をむく。","保存袋や保存容器に卵とチャーシューの煮汁を入れる。6時間でほんのり、12時間がおすすめ、24時間でしっかり味。","チャーシューの煮汁がない場合は、醤油100ml・水100ml・みりん50ml・酒50ml・砂糖大さじ1を一度沸騰させ、冷ましてから卵を漬ける。"],"tags":["チャーシューセット","煮卵","半熟卵","ラーメン"],"memo":"関連レシピ：圧力鍋チャーシュー（CHAR-SHU-001）。半熟なら7分ゆで＋12時間漬けがおすすめ。冷蔵で3〜4日以内を目安に食べ切る。","relatedCodes":["CHAR-SHU-001"]}};
+
 const seed = [{
   id:"machichuka-soup",
   title:"町中華風 中華スープ",
@@ -248,6 +258,13 @@ function openDetail(id, selectedServings=null){
     <div class="section"><h3>材料</h3><ul>${(r.ingredients||[]).map(x=>`<li>${esc(scaleIngredient(x,ratio))}</li>`).join("")}</ul></div>
     <div class="section"><h3>作り方</h3><ol>${(r.steps||[]).map(x=>`<li>${esc(x)}</li>`).join("")}</ol></div>
     ${r.memo?`<div class="section"><h3>メモ</h3><p>${esc(r.memo).replace(/\n/g,"<br>")}</p></div>`:""}
+    ${(r.relatedCodes||[]).length?`<div class="section"><h3>関連レシピ</h3><div class="related">${r.relatedCodes.map(code=>{
+      const linked=recipes.find(x=>x.code===code);
+      const label=linked?linked.title:(recipeCodeRegistry[code]?.title||code);
+      return linked
+        ? `<button class="ghost" onclick="openDetail('${linked.id}')">↔ ${esc(label)}</button>`
+        : `<button class="ghost" onclick="importRelatedCode('${code}')">＋ ${esc(label)}を登録</button>`;
+    }).join("")}</div></div>`:""}
     <div class="actions">
       <button class="ghost" onclick="toggleFav('${r.id}');openDetail('${r.id}',${current||'null'})">${r.favorite?'★ お気に入り解除':'☆ お気に入り'}</button>
       ${r.id!=="machichuka-soup"?`<button class="ghost" onclick="deleteRecipe('${r.id}')">削除</button>`:""}
@@ -258,6 +275,8 @@ function openAdd(){
   document.getElementById("addModal").classList.add("show");
 }
 function openAddBlank(){
+  window.__pendingRecipeCode="";
+  window.__pendingRelatedCodes=[];
   document.getElementById("importNotice").classList.remove("show");
   openAdd();
 }
@@ -277,15 +296,34 @@ function saveRecipe(){
     steps:splitLines("fSteps"),
     tags:document.getElementById("fTags").value.split(",").map(x=>x.trim()).filter(Boolean),
     memo:document.getElementById("fMemo").value.trim(),
+    code:window.__pendingRecipeCode||"",
+    relatedCodes:window.__pendingRelatedCodes||[],
     favorite:false
   };
-  recipes.unshift(r);persist();document.getElementById("importNotice").classList.remove("show");closeModal("addModal");
+  recipes.unshift(r);persist();window.__pendingRecipeCode="";window.__pendingRelatedCodes=[];document.getElementById("importNotice").classList.remove("show");closeModal("addModal");
   ["fTitle","fServings","fTime","fIngredients","fSteps","fTags","fMemo"].forEach(id=>document.getElementById(id).value="");
   render();
 }
 function deleteRecipe(id){
   if(!confirm("このレシピを削除しますか？"))return;
   recipes=recipes.filter(x=>x.id!==id);persist();closeModal("detailModal");render();
+}
+
+function normalizeCode(code){
+  return String(code||"").trim().toUpperCase();
+}
+function importByCode(){
+  const input=document.getElementById("recipeCode");
+  const code=normalizeCode(input.value);
+  if(!code){ alert("登録コードを入力してください。"); return; }
+  const data=recipeCodeRegistry[code];
+  if(!data){ alert("この登録コードはまだアプリに登録されていません。"); return; }
+  fillAddForm({...data, code});
+}
+function importRelatedCode(code){
+  const data=recipeCodeRegistry[normalizeCode(code)];
+  if(!data){ alert("関連レシピが見つかりません。"); return; }
+  fillAddForm({...data, code:normalizeCode(code)});
 }
 
 function fillAddForm(data){
