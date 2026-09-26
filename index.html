@@ -38,6 +38,10 @@ ul,ol{padding-left:22px;line-height:1.75}.detail-title{font-size:25px;margin:10p
 .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}.actions{display:flex;gap:8px;margin-top:18px;flex-wrap:wrap}
 .form{display:grid;gap:12px}.help{font-size:12px;color:var(--muted);margin-top:-6px}
 .badge{display:inline-block;background:var(--accent2);color:#8b3f1f;border-radius:999px;padding:6px 9px;font-size:12px;margin-right:5px}
+.serving-box{display:flex;align-items:center;gap:10px;margin:16px 0 4px;padding:12px;background:#faf7f3;border:1px solid var(--border);border-radius:16px}
+.serving-box strong{margin-right:auto}
+.serving-btn{width:42px;height:42px;padding:0;border-radius:50%;background:white;border:1px solid var(--border);font-size:22px}
+.serving-count{min-width:54px;text-align:center;font-weight:800;font-size:18px}
 footer{padding:30px 16px;text-align:center;color:var(--muted);font-size:12px}
 @media(min-width:700px){.modal{align-items:center}.sheet{border-radius:24px;max-height:86vh}}
 </style>
@@ -164,20 +168,83 @@ function render(){
 function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[m]))}
 function toggleFav(id){ const r=recipes.find(x=>x.id===id); if(r){r.favorite=!r.favorite;persist();render();} }
 
-function openDetail(id){
+
+function getBaseServings(text){
+  const m=String(text||"").match(/(\d+(?:\.\d+)?)/);
+  return m ? Number(m[1]) : null;
+}
+function formatNum(n){
+  const rounded=Math.round(n*100)/100;
+  if(Number.isInteger(rounded)) return String(rounded);
+  return String(rounded).replace(/\.0+$/,"");
+}
+function scaleFractionToken(token, ratio){
+  const parts=token.split("/");
+  if(parts.length!==2) return token;
+  const a=Number(parts[0]), b=Number(parts[1]);
+  if(!Number.isFinite(a)||!Number.isFinite(b)||b===0) return token;
+  return formatNum((a/b)*ratio);
+}
+function scaleIngredient(text, ratio){
+  if(ratio===1) return text;
+  const keep=[];
+  const stash=value=>{
+    const token=String.fromCharCode(0xE000 + keep.length);
+    keep.push(value);
+    return token;
+  };
+  // 分数の範囲（例：1/3〜1/2）
+  text=text.replace(/(\d+)\/(\d+)\s*[〜~～-]\s*(\d+)\/(\d+)/g,(m,a,b,c,d)=>
+    stash(`${formatNum((Number(a)/Number(b))*ratio)}〜${formatNum((Number(c)/Number(d))*ratio)}`)
+  );
+  // 数値の範囲（例：10〜15、2〜4）
+  text=text.replace(/(\d+(?:\.\d+)?)\s*[〜~～-]\s*(\d+(?:\.\d+)?)/g,(m,a,b)=>
+    stash(`${formatNum(Number(a)*ratio)}〜${formatNum(Number(b)*ratio)}`)
+  );
+  // 単独の分数（例：1/2）
+  text=text.replace(/(\d+)\/(\d+)/g,(m,a,b)=>
+    stash(formatNum((Number(a)/Number(b))*ratio))
+  );
+  // 単独の数値
+  text=text.replace(/\d+(?:\.\d+)?/g,m=>formatNum(Number(m)*ratio));
+  // 先に退避した範囲・分数を戻す
+  keep.forEach((value,i)=>{ text=text.replace(String.fromCharCode(0xE000+i),value); });
+  return text;
+}
+function changeServings(id, delta){
   const r=recipes.find(x=>x.id===id); if(!r)return;
+  const base=getBaseServings(r.servings);
+  if(!base){ alert("このレシピは人数が数値で登録されていないため、自動計算できません。"); return; }
+  const current=Number(document.getElementById("servingCount")?.dataset.value || base);
+  const next=Math.max(1,current+delta);
+  openDetail(id,next);
+}
+
+function openDetail(id, selectedServings=null){
+  const r=recipes.find(x=>x.id===id); if(!r)return;
+  const base=getBaseServings(r.servings);
+  const current=selectedServings || base;
+  const ratio=(base && current) ? current/base : 1;
+  const servingControl=base ? `
+    <div class="serving-box">
+      <strong>人数</strong>
+      <button class="serving-btn" onclick="changeServings('${r.id}',-1)">−</button>
+      <span id="servingCount" class="serving-count" data-value="${current}">${current}人分</span>
+      <button class="serving-btn" onclick="changeServings('${r.id}',1)">＋</button>
+    </div>` : `<div class="meta" style="margin-top:12px">人数：${esc(r.servings||'未登録')}</div>`;
   document.getElementById("detailBody").innerHTML=`
-    <div class="meta">${esc(r.category)} ・ ${esc(r.servings||'')}</div>
+    <div class="meta">${esc(r.category)}</div>
     <h2 class="detail-title">${esc(r.title)}</h2>
     <div>
       <span class="badge">⏱ ${esc(r.time||'未登録')}</span>
       ${(r.tags||[]).map(t=>`<span class="badge">${esc(t)}</span>`).join("")}
     </div>
-    <div class="section"><h3>材料</h3><ul>${(r.ingredients||[]).map(x=>`<li>${esc(x)}</li>`).join("")}</ul></div>
+    ${servingControl}
+    <div class="section"><h3>材料</h3><ul>${(r.ingredients||[]).map(x=>`<li>${esc(scaleIngredient(x,ratio))}</li>`).join("")}</ul></div>
     <div class="section"><h3>作り方</h3><ol>${(r.steps||[]).map(x=>`<li>${esc(x)}</li>`).join("")}</ol></div>
     ${r.memo?`<div class="section"><h3>メモ</h3><p>${esc(r.memo).replace(/\n/g,"<br>")}</p></div>`:""}
     <div class="actions">
-      <button class="ghost" onclick="toggleFav('${r.id}');openDetail('${r.id}')">${r.favorite?'★ お気に入り解除':'☆ お気に入り'}</button>
+      <button class="ghost" onclick="toggleFav('${r.id}');openDetail('${r.id}',${current||'null'})">${r.favorite?'★ お気に入り解除':'☆ お気に入り'}</button>
       ${r.id!=="machichuka-soup"?`<button class="ghost" onclick="deleteRecipe('${r.id}')">削除</button>`:""}
     </div>`;
   document.getElementById("detailModal").classList.add("show");
