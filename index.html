@@ -42,7 +42,8 @@ ul,ol{padding-left:22px;line-height:1.75}.detail-title{font-size:25px;margin:10p
 .serving-box{display:flex;align-items:center;gap:10px;margin:16px 0 4px;padding:12px;background:#faf7f3;border:1px solid var(--border);border-radius:16px}
 .serving-box strong{margin-right:auto}
 .serving-btn{width:42px;height:42px;padding:0;border-radius:50%;background:white;border:1px solid var(--border);font-size:22px}
-.serving-count{min-width:54px;text-align:center;font-weight:800;font-size:18px}
+.serving-count{min-width:64px;text-align:center;font-weight:800;font-size:18px}
+.scale-label{font-size:12px;color:var(--muted);margin-top:5px}
 .import-notice{display:none;background:#fff6d8;border:1px solid #f0d98a;color:#6b5412;border-radius:12px;padding:10px 12px;font-size:12px;line-height:1.5}
 .import-notice.show{display:block}
 .code-import{display:flex;gap:8px;margin-top:10px}
@@ -58,12 +59,12 @@ footer{padding:30px 16px;text-align:center;color:var(--muted);font-size:12px}
 </style>
 </head>
 <body>
-<!-- app-version: v1.4 -->
+<!-- app-version: v1.6 -->
 <header>
   <div class="wrap">
     <div class="brand">
       <div>
-        <h1>🍳 うちレシピ <span class="version">v1.4</span></h1>
+        <h1>🍳 うちレシピ <span class="version">v1.6</span></h1>
         <div class="sub">家で使うレシピを、見やすくひとまとめ</div>
       </div>
       <button class="primary" onclick="openAddBlank()">＋ 追加</button>
@@ -72,10 +73,6 @@ footer{padding:30px 16px;text-align:center;color:var(--muted);font-size:12px}
       <input id="search" placeholder="料理名・材料で検索" oninput="render()">
       <button class="ghost" onclick="toggleFavOnly()">★</button>
     </div>
-    <div class="code-import">
-      <input id="recipeCode" placeholder="登録コード 例：CHAR-SHU-001" autocomplete="off">
-      <button class="ghost" onclick="importByCode()">コード登録</button>
-    </div>
     <details class="chatgpt-import">
       <summary>🤖 ChatGPTから貼り付け登録</summary>
       <textarea id="chatgptPaste" placeholder='ChatGPTが出した登録用データをここに貼り付け'></textarea>
@@ -83,7 +80,7 @@ footer{padding:30px 16px;text-align:center;color:var(--muted);font-size:12px}
         <button class="primary" onclick="importFromPaste()">読み込む</button>
         <button class="ghost" onclick="clearPaste()">クリア</button>
       </div>
-      <div class="help">※ JSON形式の登録用データを貼り付けると、追加フォームへ自動入力します。</div>
+      <div class="help">※ 今後はこの貼り付け登録が基本です。同名レシピは上書きか別保存を選べます。</div>
     </details>
     <div class="filters" id="filters"></div>
   </div>
@@ -239,6 +236,12 @@ function scaleIngredient(text, ratio){
   });
 }
 
+function changeMultiplier(id, delta){
+  const current=Number(document.getElementById("servingCount")?.dataset.value || 1);
+  const next=Math.max(0.5,Math.round((current+delta)*2)/2);
+  openDetail(id,null,next);
+}
+
 function changeServings(id, delta){
   const r=recipes.find(x=>x.id===id); if(!r)return;
   const base=getBaseServings(r.servings);
@@ -248,18 +251,28 @@ function changeServings(id, delta){
   openDetail(id,next);
 }
 
-function openDetail(id, selectedServings=null){
+function openDetail(id, selectedServings=null, selectedMultiplier=null){
   const r=recipes.find(x=>x.id===id); if(!r)return;
   const base=getBaseServings(r.servings);
-  const current=selectedServings || base;
-  const ratio=(base && current) ? current/base : 1;
-  const servingControl=base ? `
+  const isPeopleRecipe=!!base;
+  const current=isPeopleRecipe ? (selectedServings || base) : (selectedMultiplier || 1);
+  const ratio=isPeopleRecipe ? current/base : current;
+
+  const servingControl=isPeopleRecipe ? `
     <div class="serving-box">
       <strong>人数</strong>
       <button class="serving-btn" onclick="changeServings('${r.id}',-1)">−</button>
       <span id="servingCount" class="serving-count" data-value="${current}">${current}人分</span>
       <button class="serving-btn" onclick="changeServings('${r.id}',1)">＋</button>
-    </div>` : `<div class="meta" style="margin-top:12px">人数：${esc(r.servings||'未登録')}</div>`;
+    </div>` : `
+    <div class="serving-box">
+      <strong>仕込み量</strong>
+      <button class="serving-btn" onclick="changeMultiplier('${r.id}',-0.5)">−</button>
+      <span id="servingCount" class="serving-count" data-value="${current}">${formatNum(current)}倍</span>
+      <button class="serving-btn" onclick="changeMultiplier('${r.id}',0.5)">＋</button>
+    </div>
+    <div class="scale-label">0.5倍刻みで材料を自動計算します。</div>`;
+
   document.getElementById("detailBody").innerHTML=`
     <div class="meta">${esc(r.category)}</div>
     <h2 class="detail-title">${esc(r.title)}</h2>
@@ -279,7 +292,7 @@ function openDetail(id, selectedServings=null){
         : `<button class="ghost" onclick="importRelatedCode('${code}')">＋ ${esc(label)}を登録</button>`;
     }).join("")}</div></div>`:""}
     <div class="actions">
-      <button class="ghost" onclick="toggleFav('${r.id}');openDetail('${r.id}',${current||'null'})">${r.favorite?'★ お気に入り解除':'☆ お気に入り'}</button>
+      <button class="ghost" onclick="toggleFav('${r.id}');openDetail('${r.id}',${isPeopleRecipe?current:'null'},${isPeopleRecipe?'null':current})">${r.favorite?'★ お気に入り解除':'☆ お気に入り'}</button>
       ${r.id!=="machichuka-soup"?`<button class="ghost" onclick="deleteRecipe('${r.id}')">削除</button>`:""}
     </div>`;
   document.getElementById("detailModal").classList.add("show");
@@ -344,12 +357,50 @@ function validateRecipeData(data){
   };
   return out;
 }
+function normalizeTitleForCompare(title){
+  return String(title||"").trim().toLowerCase().replace(/\s+/g,"").replace(/[・･\-ー＿_]/g,"");
+}
+function findDuplicateRecipe(title){
+  const key=normalizeTitleForCompare(title);
+  return recipes.find(r=>normalizeTitleForCompare(r.title)===key) || null;
+}
+function replaceRecipe(existingId, data){
+  const idx=recipes.findIndex(r=>r.id===existingId);
+  if(idx<0) return;
+  const old=recipes[idx];
+  recipes[idx]={
+    ...old,
+    title:data.title,
+    category:data.category||"その他",
+    servings:data.servings||"",
+    time:data.time||"",
+    ingredients:Array.isArray(data.ingredients)?data.ingredients:[],
+    steps:Array.isArray(data.steps)?data.steps:[],
+    tags:Array.isArray(data.tags)?data.tags:[],
+    memo:data.memo||"",
+    code:data.code||old.code||"",
+    relatedCodes:Array.isArray(data.relatedCodes)?data.relatedCodes:(old.relatedCodes||[])
+  };
+  persist();
+  render();
+}
+
 function importFromPaste(){
   const box=document.getElementById("chatgptPaste");
   const raw=cleanJsonText(box.value);
   if(!raw){ alert("ChatGPTの登録用データを貼り付けてください。"); return; }
   try{
     const data=validateRecipeData(JSON.parse(raw));
+    const dup=findDuplicateRecipe(data.title);
+    if(dup){
+      const doReplace=confirm(`「${data.title}」はすでに登録されています。\n\nOK：既存レシピを上書き更新\nキャンセル：別レシピとして追加`);
+      if(doReplace){
+        replaceRecipe(dup.id,data);
+        box.value="";
+        alert("既存レシピを更新しました。");
+        return;
+      }
+    }
     fillAddForm(data);
   }catch(e){
     alert("読み込みに失敗しました。ChatGPTの「うちレシピ登録用データ」をそのまま貼り付けてください。");
