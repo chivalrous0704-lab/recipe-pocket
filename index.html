@@ -26,6 +26,8 @@ h1{font-size:24px;margin:0}.sub{font-size:12px;color:var(--muted)}
 button{border:0;border-radius:12px;padding:11px 14px;font-weight:700;cursor:pointer}
 .primary{background:var(--accent);color:white}.ghost{background:white;border:1px solid var(--border);color:var(--text)}
 .searchbar{display:flex;gap:8px;margin-top:14px}
+.clear-search-btn{display:none;white-space:nowrap}
+.clear-search-btn.show{display:inline-block}
 input,select,textarea{width:100%;border:1px solid var(--border);border-radius:12px;padding:12px;background:white;font:inherit}
 textarea{min-height:90px;resize:vertical}
 .filters{display:flex;gap:8px;overflow:auto;padding:12px 0 2px}
@@ -88,18 +90,19 @@ footer{padding:30px 16px;text-align:center;color:var(--muted);font-size:12px}
 </style>
 </head>
 <body>
-<!-- app-version: v2.4 -->
+<!-- app-version: v2.5 -->
 <header>
   <div class="wrap">
     <div class="brand">
       <div>
-        <h1>🍳 うちレシピ <span class="version">v2.4</span></h1>
+        <h1>🍳 うちレシピ <span class="version">v2.5</span></h1>
         <div class="sub">家で使うレシピを、見やすくひとまとめ</div>
       </div>
       <button class="primary" onclick="openAddBlank()">＋ 追加</button>
     </div>
     <div class="searchbar">
       <input id="search" placeholder="料理名・材料で検索" oninput="render()">
+      <button id="clearSearchBtn" class="ghost clear-search-btn" onclick="clearSearch()">× クリア</button>
       <button class="ghost" onclick="toggleFavOnly()">★</button>
     </div>
     <details class="chatgpt-import">
@@ -540,9 +543,20 @@ function renderFilters(){
 function setCat(c){ currentCat=c; render(); }
 function toggleFavOnly(){ favOnly=!favOnly; render(); }
 
+function clearSearch(){
+  const box=document.getElementById("search");
+  if(box) box.value="";
+  currentCat="すべて";
+  favOnly=false;
+  render();
+  setTimeout(()=>box?.focus(),0);
+}
+
 function render(){
   renderFilters();
   const q = document.getElementById("search").value.trim().toLowerCase();
+  const clearBtn=document.getElementById("clearSearchBtn");
+  if(clearBtn) clearBtn.classList.toggle("show", !!q || currentCat!=="すべて" || favOnly);
   let list = recipes.filter(r => {
     const hitCat = currentCat==="すべて" || r.category===currentCat;
     const hay = [r.title, r.category, ...(r.ingredients||[]), ...(r.tags||[])].join(" ").toLowerCase();
